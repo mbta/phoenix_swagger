@@ -89,7 +89,7 @@ defmodule Mix.Tasks.Phx.Swagger.Generate do
 
   def default_swagger_info do
     %{
-      swagger: "2.0",
+      openapi: "3.0",
       info: %{
         title: @default_title,
         version: @default_version,
