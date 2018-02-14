@@ -210,7 +210,9 @@ defmodule PhoenixSwagger.JsonApi do
   end
   def attribute(model = %Schema{}, name, type = %Schema{}, description, opts) do
     {required?, opts} = Keyword.pop(opts, :required)
+    {nullable?, opts} = Keyword.pop(opts, :nullable)
     attr_schema = struct!(type, [description: description] ++ opts)
+    attr_schema = if nullable?, do: %{attr_schema | :'x-nullable' => true}, else: attr_schema
     model = put_in(model.properties.attributes.properties[name], attr_schema)
 
     required = case {model.properties.attributes.required, required?} do
