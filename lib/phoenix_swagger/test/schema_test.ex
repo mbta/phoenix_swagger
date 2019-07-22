@@ -101,7 +101,7 @@ defmodule PhoenixSwagger.SchemaTest do
   def validate_resp_schema(conn, swagger_schema, model_name) do
     response_data = conn.resp_body |> Poison.decode!
     schema = swagger_schema.schema["definitions"][model_name]
-    errors_with_list_paths = ExJsonSchema.Validator.validate(swagger_schema, schema, response_data, ["#"])
+    errors_with_list_paths = ExJsonSchema.Validator.validation_errors(swagger_schema, schema, response_data, "#")
     case errors_with_list_paths do
       [] -> conn
       errors ->
