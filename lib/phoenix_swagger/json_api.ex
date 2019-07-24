@@ -120,7 +120,13 @@ defmodule PhoenixSwagger.JsonApi do
         included: %Schema {
           type: :array,
           description: "Included resources",
-          items: %Schema{}
+          items: %Schema {
+            type:  :object,
+            properties: %{
+              type: %Schema{type: :string, description: "The JSON-API resource type"},
+              id: %Schema{type: :string, description: "The JSON-API resource ID"},
+            }
+          }
         }
       },
       required:  [:data]
@@ -238,25 +244,25 @@ defmodule PhoenixSwagger.JsonApi do
   whether to structure the relationship as an object or array.
   Defaults to `:has_one`
   """
+  @spec relationship(%Schema{}, name :: atom, [option]) :: %Schema{}
+        when option: {:type, relationship_type} | {:nullable, boolean},
+             relationship_type: :has_one | :has_many
   def relationship(model = %Schema{}, name, opts \\ []) do
     type = opts[:type] || :has_one
 
-    put_in(
-      model.properties.relationships.properties[name],
-      %Schema{
-        type: :object,
-        properties: %{
-          links: %Schema{
-            type: :object,
-            properties: %{
-              self: %Schema{type: :string, description: "Relationship link for #{name}"},
-              related: %Schema{type: :string, description: "Related #{name} link"}
-            }
-          },
-          data: relationship_data(type, name)
-        }
+    put_in(model.properties.relationships.properties[name], %Schema{
+      type: :object,
+      properties: %{
+        links: %Schema{
+          type: :object,
+          properties: %{
+            self: %Schema{type: :string, description: "Relationship link for #{name}"},
+            related: %Schema{type: :string, description: "Related #{name} link"}
+          }
+        },
+        data: relationship_data(type, name) |> Schema.nullable(opts[:nullable])
       }
-    )
+    })
   end
 
   defp relationship_data(:has_one, name) do
@@ -268,6 +274,7 @@ defmodule PhoenixSwagger.JsonApi do
       }
     }
   end
+
   defp relationship_data(:has_many, name) do
     %Schema{
       type: :array,

@@ -38,10 +38,16 @@ defmodule Mix.Tasks.Phx.Swagger.Generate do
       |> Keyword.get(:swagger_files, %{})
 
     Enum.each(swagger_files, fn {output_file, config} ->
-      router = attempt_load(config[:router])
-      endpoint = attempt_load(config[:endpoint])
-      write_file(output_file, swagger_document(router, endpoint))
-      IO.puts "#{app_name()}: generated #{output_file}"
+      result =
+        with {:ok, router} <- attempt_load(config[:router]),
+             {:ok, endpoint} <- attempt_load(config[:endpoint]) do
+          write_file(output_file, swagger_document(router, endpoint))
+        end
+
+      case result do
+        :ok -> :ok
+        {:error, reason} -> Logger.warn("Failed to generate #{output_file}: #{reason}")
+      end
     end)
   end
 
@@ -50,13 +56,20 @@ defmodule Mix.Tasks.Phx.Swagger.Generate do
     unless File.exists?(directory) do
       File.mkdir_p!(directory)
     end
-    File.write!(output_file, contents)
+
+    case File.read(output_file) do
+      {:ok, ^contents} -> :ok
+      _ ->
+        File.write!(output_file, contents)
+        IO.puts "#{app_name()}: generated #{output_file}"
+    end
   end
 
+  defp attempt_load(nil), do: {:ok, nil}
   defp attempt_load(module_name) do
-    case Code.ensure_loaded(module_name) do
-      {:module, result} -> result
-      _ -> nil
+    case Code.ensure_compiled(module_name) do
+      {:module, result} -> {:ok, result}
+      {:error, reason} -> {:error, "Failed to load module: #{module_name}: #{reason}"}
     end
   end
 
@@ -109,11 +122,23 @@ defmodule Mix.Tasks.Phx.Swagger.Generate do
   end
 
   defp find_swagger_path_function(route = %{opts: action, path: path, verb: verb}) when is_atom(action) do
+    generate_swagger_path_function(route, action, path, verb)
+  end
+  # In Phoenix >= 1.4.7 the `opts` key was renamed to `plug_opts`
+  defp find_swagger_path_function(route = %{plug_opts: action, path: path, verb: verb}) when is_atom(action) do
+    generate_swagger_path_function(route, action, path, verb)
+  end
+  defp find_swagger_path_function(_route) do
+    # action not an atom usually means route to a plug which isn't a Phoenix controller
+    nil
+  end
+
+  defp generate_swagger_path_function(route, action, path, verb) do
     controller = find_controller(route)
     swagger_fun = "swagger_path_#{action}" |> String.to_atom()
 
     cond do
-      Code.ensure_loaded?(controller) ->
+      Code.ensure_compiled?(controller) ->
         %{
           controller: controller,
           swagger_fun: swagger_fun,
@@ -124,12 +149,8 @@ defmodule Mix.Tasks.Phx.Swagger.Generate do
         Logger.warn "Warning: #{controller} module didn't load."
         nil
     end
-  end
-  defp find_swagger_path_function(_route) do
-    # action not an atom usually means route to a plug which isn't a Phoenix controller
-    nil
-  end
 
+  end
 
   defp format_path(path) do
     Regex.replace(~r/:([^\/]+)/, path, "{\\1}")

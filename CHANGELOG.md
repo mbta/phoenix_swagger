@@ -1,3 +1,14 @@
+# 0.8.1
+
+  * Fix for crash on non-GET requests
+  * Fix compilation error running `mix phx.swagger.generate` before `mix compile`
+  * Validate number type in query parameter
+  * Add `id` and `type` properties to the `included`-items schema
+  * Add `Schema.nullable` function to set the `x-nullable` property
+  * Add `nullable:` option to `JsonSchema.relationship` function
+  * Handle `x-nullable` schemas in `SchemaTest`
+  * Add `deprecated` flag for operations
+
 # 0.8.0
 
   * Passing module names and output path as mix task parameters is no longer supported.
@@ -10,6 +21,11 @@
       "priv/static/swagger.json" => [router: MyAppWeb.Router, endpoint: MyAppWeb.Endpoint],
       # additional swagger files here
     }
+  ```
+  * `phoenix_swagger` can now be run as a mix compiler task, ensuring that the generated swagger is kept in sync with code, and enabling live reloading.
+
+  ```elixir
+  compilers: [:phoenix, :gettext, :phoenix_swagger] ++ Mix.compilers
   ```
 
   * The HTTP verb and path can now be inferred from the phoenix router:
@@ -28,7 +44,7 @@
     response 200, "OK", Schema.ref(User)
   end
   ```
-  Note that if your controller contains a `delete/2` function (such as when using the `resources` convention), then calling `delete/2` from `PhoenixSwagger.Path` will now cause a compilation error. To avoid this problem, include the full module name:
+  Note that if your controller contains a `delete/2` function (such as when using the `resources` convention), then calling `delete/2` from `PhoenixSwagger.Path` will now cause a compilation error. To avoid this problem, include the full module (shown below), or simply remove the line and allow the verb and path to be inferred from the route:
   ```elixir
   swagger_path(:delete) do
     PhoenixSwagger.Path.delete "/api/users/{id}"

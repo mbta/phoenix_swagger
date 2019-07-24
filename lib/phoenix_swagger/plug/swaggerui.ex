@@ -22,10 +22,10 @@ defmodule PhoenixSwagger.Plug.SwaggerUI do
   alias Plug.Conn
 
   # Serve static assets before routing
-  plug Plug.Static, at: "/", from: :phoenix_swagger
+  plug(Plug.Static, at: "/", from: :phoenix_swagger)
 
-  plug :match
-  plug :dispatch
+  plug(:match)
+  plug(:dispatch)
 
   @template """
   <!-- HTML for static distribution bundle build -->
@@ -110,6 +110,19 @@ defmodule PhoenixSwagger.Plug.SwaggerUI do
       url: swagger_url.href,
       dom_id: '#swagger-ui',
       deepLinking: true,
+      tagsSorter: (a, b) => {
+        return a.localeCompare(b);
+      },
+      operationsSorter: (a, b) => {
+        var methodsOrder = ["get", "post", "put", "patch", "delete", "options"];
+        var result = methodsOrder.indexOf( a.get("method") ) - methodsOrder.indexOf( b.get("method") );
+
+        if (result === 0) {
+          result = a.get("path").localeCompare(b.get("path"));
+        }
+
+        return result;
+      },
       presets: [
         SwaggerUIBundle.presets.apis,
         SwaggerUIStandalonePreset
@@ -131,6 +144,7 @@ defmodule PhoenixSwagger.Plug.SwaggerUI do
   # Redirect / to /index.html
   get "/" do
     base_path = conn.request_path |> String.trim_trailing("/")
+
     conn
     |> Conn.put_resp_header("location", "#{base_path}/index.html")
     |> Conn.put_resp_content_type("text/html")
@@ -144,12 +158,24 @@ defmodule PhoenixSwagger.Plug.SwaggerUI do
   end
 
   # Render the swagger.json file or 404 for any other file
-  get "/:name" do
+  get "/*paths" do
     spec_url = conn.assigns.spec_url
-    case conn.path_params["name"] do
-      ^spec_url -> Conn.send_file(conn, 200, conn.assigns.swagger_file_path)
-      _ -> Conn.send_resp(conn, 404, "not found")
+    case conn.path_params["paths"] do
+      [^spec_url] -> Conn.send_file(conn, 200, conn.assigns.swagger_file_path)
+      _ ->
+        if accept_json?(conn) do
+          conn
+          |> Conn.put_resp_content_type("application/json")
+          Conn.send_resp(conn, 404, Poison.encode!(%{"Error": "not found"}))
+          |> halt
+        else
+          Conn.send_resp(conn, 404, "not found")
+        end
     end
+  end
+
+  match "/*paths" do
+    Conn.send_resp(conn, 405, "method not allowed")
   end
 
   @doc """
@@ -178,5 +204,12 @@ defmodule PhoenixSwagger.Plug.SwaggerUI do
     |> Conn.assign(:spec_url, url)
     |> Conn.assign(:swagger_file_path, Path.join([Application.app_dir(app), swagger_file_path]))
     |> super([])
+  end
+
+  defp accept_json?(conn) do
+    case get_req_header(conn, "accept") do
+      ["application/json"] -> true
+      _ -> false
+    end
   end
 end
